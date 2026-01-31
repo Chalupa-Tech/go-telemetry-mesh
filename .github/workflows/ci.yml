@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.6'
+
+      - name: Configure Git for Private Modules
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        if: env.GH_PAT != ''
+        run: |
+          git config --global url."https://${GH_PAT}@github.com/Chalupa-Tech".insteadOf "https://github.com/Chalupa-Tech"
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v ./...
+
+  check-changelog:
+    name: Enforce Changelog
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for Changelog modifications
+        run: |
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "CHANGELOG.md"; then
+            echo "CHANGELOG.md has been modified."
+          else
+            echo "::error::CHANGELOG.md must be modified in every PR."
+            exit 1
+          fi

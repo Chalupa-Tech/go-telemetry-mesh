@@ -1,0 +1,5 @@
+severity = "error"
+confidence = 0.8
+
+[rule.context-as-argument]
+  arguments = ["allowTypesBefore: *testing.T"]

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package api.proto.v1;
+
+option go_package = "github.com/Chalupa-Tech/go-telemetry-mesh/api/proto/v1;meshv1";
+
+service MeshService {
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message PingRequest {
+  string origin = 1;
+  int64 timestamp = 2;
+}
+
+message PingResponse {
+  bool success = 1;
+  int64 received_at = 2;
+}
