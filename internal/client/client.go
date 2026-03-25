@@ -5,37 +5,46 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"os"
 	"sync"
 	"time"
 
 	meshv1 "github.com/Chalupa-Tech/go-telemetry-mesh/api/proto/v1"
+	"github.com/Chalupa-Tech/go-telemetry-mesh/internal/metrics"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// MeshClient discovers peers via DNS and pings them over gRPC.
 type MeshClient struct {
-	HeadlessSvc string
-	Port        string
-	MyOrigin    string
+	headlessSvc string
+	port        string
+	nodeName    string
+	interval    time.Duration
+	timeout     time.Duration
+	metrics     *metrics.Collector
+	podIP       string
 }
 
-func NewMeshClient(headlessSvc, port string) *MeshClient {
-	hostname, _ := os.Hostname()
+// NewMeshClient creates a new mesh client.
+func NewMeshClient(headlessSvc, port, nodeName, podIP string, interval, timeout time.Duration, m *metrics.Collector) *MeshClient {
 	return &MeshClient{
-		HeadlessSvc: headlessSvc,
-		Port:        port,
-		MyOrigin:    hostname,
+		headlessSvc: headlessSvc,
+		port:        port,
+		nodeName:    nodeName,
+		podIP:       podIP,
+		interval:    interval,
+		timeout:     timeout,
+		metrics:     m,
 	}
 }
 
+// Start runs the ping loop until the context is cancelled.
 func (c *MeshClient) Start(ctx context.Context) {
-	ticker := time.NewTicker(15 * time.Second) // Ping every 15s
+	ticker := time.NewTicker(c.interval)
 	defer ticker.Stop()
 
-	// Initial run
 	c.scanAndPing(ctx)
 
 	for {
@@ -49,58 +58,92 @@ func (c *MeshClient) Start(ctx context.Context) {
 }
 
 func (c *MeshClient) scanAndPing(ctx context.Context) {
-	ips, err := net.LookupHost(c.HeadlessSvc)
+	ips, err := net.LookupHost(c.headlessSvc)
 	if err != nil {
-		slog.Error("Failed to lookup peers", "error", err, "service", c.HeadlessSvc)
+		slog.Error("Failed to lookup peers", "error", err, "service", c.headlessSvc)
 		return
 	}
 
-	var wg sync.WaitGroup
+	// Filter out self
+	var peers []string
 	for _, ip := range ips {
-		// Skip self? Hard to detect IP matching reliable without more logic,
-		// but pinging self is fine for now.
+		if ip != c.podIP {
+			peers = append(peers, ip)
+		}
+	}
+
+	c.metrics.PeersDiscovered.Set(float64(len(peers)))
+
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		failures int
+	)
+
+	for _, ip := range peers {
 		wg.Add(1)
 		go func(targetIP string) {
 			defer wg.Done()
-			c.pingPeer(ctx, targetIP)
+			if !c.pingPeer(ctx, targetIP) {
+				mu.Lock()
+				failures++
+				mu.Unlock()
+			}
 		}(ip)
 	}
 	wg.Wait()
+
+	if failures == 0 && len(peers) > 0 {
+		c.metrics.ClusterHealthy.Set(1)
+	} else {
+		c.metrics.ClusterHealthy.Set(0)
+	}
 }
 
-func (c *MeshClient) pingPeer(ctx context.Context, ip string) {
-	// Create connection with OTel instrumentation
-	target := fmt.Sprintf("%s:%s", ip, c.Port)
+// pingPeer sends a gRPC ping and records metrics. Returns true on success.
+func (c *MeshClient) pingPeer(ctx context.Context, ip string) bool {
+	target := fmt.Sprintf("%s:%s", ip, c.port)
 
-	// Note: Creating a new client for every ping is inefficient for high scale,
-	// but acceptable for a canary mesh with standard peer discovery intervals.
-	// Ideally we would cache connections.
 	conn, err := grpc.NewClient(target,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)
 	if err != nil {
 		slog.Error("Failed to dial peer", "peer", ip, "error", err)
-		return
+		c.metrics.RecordError(c.nodeName, ip, "connection")
+		return false
 	}
 	defer conn.Close()
 
 	client := meshv1.NewMeshServiceClient(conn)
 
+	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
 	req := &meshv1.PingRequest{
-		Origin:    c.MyOrigin,
+		Origin:    c.nodeName,
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	// Context with timeout for the call
-	callCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-
+	start := time.Now()
 	resp, err := client.Ping(callCtx, req)
+	duration := time.Since(start)
+
 	if err != nil {
-		slog.Error("Ping failed", "peer", ip, "error", err)
-		return
+		errType := "rpc"
+		if callCtx.Err() == context.DeadlineExceeded {
+			errType = "timeout"
+		}
+		slog.Warn("Ping failed", "peer", ip, "error", err, "duration", duration)
+		c.metrics.RecordError(c.nodeName, ip, errType)
+		return false
 	}
 
-	slog.Info("Ping success", "peer", ip, "latency_ns", time.Now().UnixNano()-req.Timestamp, "remote_ts", resp.ReceivedAt)
+	c.metrics.RecordSuccess(c.nodeName, ip, duration.Seconds())
+	slog.Debug("Ping success",
+		"peer", ip,
+		"duration", duration,
+		"remote_ts", resp.ReceivedAt,
+	)
+	return true
 }

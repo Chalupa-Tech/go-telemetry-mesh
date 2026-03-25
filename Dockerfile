@@ -1,17 +1,16 @@
-FROM golang:1.24.0-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 
-WORKDIR /app
+ARG TARGETARCH
+WORKDIR /src
 
 COPY go.mod go.sum ./
-COPY vendor/ vendor/
-COPY api/ api/
-COPY internal/ internal/
-COPY cmd/ cmd/
+RUN go mod download
 
-# Build using vendor directory
-RUN go build -mod=vendor -o go-telemetry-mesh ./cmd/go-telemetry-mesh
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go test ./...
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -o /telemetry-mesh ./cmd/server/
 
-FROM alpine:latest
-WORKDIR /root/
-COPY --from=builder /app/go-telemetry-mesh .
-CMD ["./go-telemetry-mesh"]
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /telemetry-mesh /telemetry-mesh
+ENTRYPOINT ["/telemetry-mesh"]
