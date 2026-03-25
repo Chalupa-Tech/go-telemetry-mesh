@@ -12,9 +12,6 @@ go-telemetry-mesh
 bin/
 pkg/
 
-# Vendored dependencies (use module proxy)
-vendor/
-
 # Profiling files
 *.prof
 
