@@ -21,7 +21,7 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
         if: env.GH_PAT != ''
         run: |
-          git config --global url."https://${GH_PAT}@github.com/Chalupa-Tech".insteadOf "https://github.com/Chalupa-Tech"
+          git config --global url."https://x-access-token:${GH_PAT}@github.com/Chalupa-Tech".insteadOf "https://github.com/Chalupa-Tech"
 
       - name: Build
         run: go build -v ./...
