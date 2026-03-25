@@ -2,51 +2,79 @@ name: Release
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
+    paths:
+      - 'CHANGELOG.md'
+      - 'go.mod'
+      - 'go.sum'
+      - '**/*.go'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get Version from Changelog
-        id: changelog_version
-        run: |
-          VERSION=$(grep -oE "##\s+\[[0-9]+\.[0-9]+\.[0-9]+\]" CHANGELOG.md | head -n 1 | sed 's/## \[//;s/\]//')
-          echo "Detected version: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
 
-      - name: Check if Tag Exists
-        id: check_tag
+      - name: Configure Git for Private Modules
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        if: env.GH_PAT != ''
         run: |
-          VERSION="${{ steps.changelog_version.outputs.version }}"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists."
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "Tag v$VERSION does not exist. Creating release."
-            echo "exists=false" >> $GITHUB_OUTPUT
+          git config --global url."https://${GH_PAT}@github.com/Chalupa-Tech".insteadOf "https://github.com/Chalupa-Tech"
+
+      - name: Tidy modules
+        run: go mod tidy
+
+      - name: Verify clean modules
+        run: |
+          if ! git diff --quiet go.mod go.sum; then
+            echo "go.mod or go.sum is not tidy. Please run 'go mod tidy' and commit the changes."
+            git diff
+            exit 1
           fi
 
-      - name: Create Tag
-        if: steps.check_tag.outputs.exists == 'false'
+      - name: Run Tests
+        run: go test -v ./... || echo "No tests found"
+
+      - name: Extract Release Data
+        id: extract
         run: |
-          VERSION="${{ steps.changelog_version.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "Release v$VERSION"
-          git push origin "v$VERSION"
+          VERSION=$(grep -m 1 "^## \[" CHANGELOG.md | sed -E 's/## \[([^]]+)\].*/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "Could not extract version from CHANGELOG.md"
+            exit 1
+          fi
+          echo "Current Version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists. Skipping release."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            awk '/^## \[/{if (p) exit; p=1; next} p' CHANGELOG.md > release_notes.md
+          fi
 
       - name: Create Release
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.extract.outputs.exists == 'false'
         uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v${{ steps.changelog_version.outputs.version }}
-          generate_release_notes: true
+          tag_name: v${{ steps.extract.outputs.version }}
+          name: v${{ steps.extract.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
