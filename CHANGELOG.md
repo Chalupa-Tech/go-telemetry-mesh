@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Release workflow now correctly extracts semver from CHANGELOG, skipping `[Unreleased]`
+- Dockerfile: add git, GOPRIVATE, and GITHUB_PAT for private module fetch during container build
 
 ## [0.2.0] - 2026-03-25
 

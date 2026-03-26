@@ -1,6 +1,12 @@
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS builder
 
+RUN apk add --no-cache git
+
 ARG TARGETARCH
+ARG GITHUB_PAT
+RUN if [ -n "$GITHUB_PAT" ]; then git config --global url."https://${GITHUB_PAT}@github.com/Chalupa-Tech".insteadOf "https://github.com/Chalupa-Tech"; fi
+
+ENV GOPRIVATE=github.com/Chalupa-Tech/*
 WORKDIR /src
 
 COPY go.mod go.sum ./
