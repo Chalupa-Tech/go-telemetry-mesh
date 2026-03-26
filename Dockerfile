@@ -1,13 +1,7 @@
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 
 ARG TARGETARCH
-ARG GITHUB_PAT
 WORKDIR /src
-
-ENV GOPRIVATE=github.com/Chalupa-Tech/*
-RUN if [ -n "$GITHUB_PAT" ]; then \
-      git config --global url."https://${GITHUB_PAT}@github.com/Chalupa-Tech".insteadOf "https://github.com/Chalupa-Tech"; \
-    fi
 
 COPY go.mod go.sum ./
 RUN go mod download
