@@ -28,5 +28,6 @@ func (s *MeshServer) Ping(ctx context.Context, req *meshv1.PingRequest) (*meshv1
 	return &meshv1.PingResponse{
 		Success:    true,
 		ReceivedAt: time.Now().UnixNano(),
+		NodeName:   s.nodeName,
 	}, nil
 }

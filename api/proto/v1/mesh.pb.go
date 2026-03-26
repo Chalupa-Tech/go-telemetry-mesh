@@ -77,6 +77,7 @@ type PingResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
 	ReceivedAt    int64                  `protobuf:"varint,2,opt,name=received_at,json=receivedAt,proto3" json:"received_at,omitempty"`
+	NodeName      string                 `protobuf:"bytes,3,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -125,6 +126,13 @@ func (x *PingResponse) GetReceivedAt() int64 {
 	return 0
 }
 
+func (x *PingResponse) GetNodeName() string {
+	if x != nil {
+		return x.NodeName
+	}
+	return ""
+}
+
 var File_api_proto_v1_mesh_proto protoreflect.FileDescriptor
 
 const file_api_proto_v1_mesh_proto_rawDesc = "" +
@@ -132,11 +140,12 @@ const file_api_proto_v1_mesh_proto_rawDesc = "" +
 	"\x17api/proto/v1/mesh.proto\x12\fapi.proto.v1\"C\n" +
 	"\vPingRequest\x12\x16\n" +
 	"\x06origin\x18\x01 \x01(\tR\x06origin\x12\x1c\n" +
-	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\"I\n" +
+	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\"f\n" +
 	"\fPingResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1f\n" +
 	"\vreceived_at\x18\x02 \x01(\x03R\n" +
-	"receivedAt2L\n" +
+	"receivedAt\x12\x1b\n" +
+	"\tnode_name\x18\x03 \x01(\tR\bnodeName2L\n" +
 	"\vMeshService\x12=\n" +
 	"\x04Ping\x12\x19.api.proto.v1.PingRequest\x1a\x1a.api.proto.v1.PingResponseB?Z=github.com/Chalupa-Tech/go-telemetry-mesh/api/proto/v1;meshv1b\x06proto3"
 
