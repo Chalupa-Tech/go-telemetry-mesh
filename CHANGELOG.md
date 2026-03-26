@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-25
+
 ### Added
 - `node_name` field in PingResponse proto — peers now identify themselves by K8s node name.
 - OpenTelemetry SDK initialization via `go-telemetry` v0.2.0 — links gRPC traces to log lines with `trace_id`/`span_id`
