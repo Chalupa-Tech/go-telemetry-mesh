@@ -9,10 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `node_name` field in PingResponse proto — peers now identify themselves by K8s node name.
+- OpenTelemetry SDK initialization via `go-telemetry` v0.2.0 — links gRPC traces to log lines with `trace_id`/`span_id`
+- Migrated all slog calls in mesh client to context-aware variants for trace correlation
 
 ### Fixed
 - Removed unused GOPRIVATE/GITHUB_PAT auth block from Dockerfile that caused build-push failure (git not in Alpine image).
 - `target_node` metric label now uses node name from gRPC response instead of pod IP.
+
+### Changed
+- Upgraded Go to 1.25, OTel dependencies to v1.42.0
+- Dockerfile builder image updated to golang:1.25-alpine
 
 ## [0.1.0] - 2026-03-25
 

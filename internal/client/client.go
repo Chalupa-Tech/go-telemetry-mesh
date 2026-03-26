@@ -60,7 +60,7 @@ func (c *MeshClient) Start(ctx context.Context) {
 func (c *MeshClient) scanAndPing(ctx context.Context) {
 	ips, err := net.LookupHost(c.headlessSvc)
 	if err != nil {
-		slog.Error("Failed to lookup peers", "error", err, "service", c.headlessSvc)
+		slog.ErrorContext(ctx, "Failed to lookup peers", "error", err, "service", c.headlessSvc)
 		return
 	}
 
@@ -109,7 +109,7 @@ func (c *MeshClient) pingPeer(ctx context.Context, ip string) bool {
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)
 	if err != nil {
-		slog.Error("Failed to dial peer", "peer", ip, "error", err)
+		slog.ErrorContext(ctx, "Failed to dial peer", "peer", ip, "error", err)
 		c.metrics.RecordError(c.nodeName, ip, "connection")
 		return false
 	}
@@ -134,7 +134,7 @@ func (c *MeshClient) pingPeer(ctx context.Context, ip string) bool {
 		if callCtx.Err() == context.DeadlineExceeded {
 			errType = "timeout"
 		}
-		slog.Warn("Ping failed", "peer", ip, "error", err, "duration", duration)
+		slog.WarnContext(ctx, "Ping failed", "peer", ip, "error", err, "duration", duration)
 		c.metrics.RecordError(c.nodeName, ip, errType)
 		return false
 	}
@@ -144,7 +144,7 @@ func (c *MeshClient) pingPeer(ctx context.Context, ip string) bool {
 		targetName = ip
 	}
 	c.metrics.RecordSuccess(c.nodeName, targetName, duration.Seconds())
-	slog.Debug("Ping success",
+	slog.DebugContext(ctx, "Ping success",
 		"peer", targetName,
 		"duration", duration,
 		"remote_ts", resp.ReceivedAt,
