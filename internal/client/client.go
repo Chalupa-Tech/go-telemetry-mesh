@@ -139,9 +139,13 @@ func (c *MeshClient) pingPeer(ctx context.Context, ip string) bool {
 		return false
 	}
 
-	c.metrics.RecordSuccess(c.nodeName, ip, duration.Seconds())
+	targetName := resp.NodeName
+	if targetName == "" {
+		targetName = ip
+	}
+	c.metrics.RecordSuccess(c.nodeName, targetName, duration.Seconds())
 	slog.Debug("Ping success",
-		"peer", ip,
+		"peer", targetName,
 		"duration", duration,
 		"remote_ts", resp.ReceivedAt,
 	)

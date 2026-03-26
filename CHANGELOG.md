@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `node_name` field in PingResponse proto — peers now identify themselves by K8s node name.
+
 ### Fixed
 - Removed unused GOPRIVATE/GITHUB_PAT auth block from Dockerfile that caused build-push failure (git not in Alpine image).
+- `target_node` metric label now uses node name from gRPC response instead of pod IP.
 
 ## [0.1.0] - 2026-03-25
 
