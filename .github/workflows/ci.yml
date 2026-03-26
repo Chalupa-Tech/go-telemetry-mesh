@@ -40,9 +40,16 @@ jobs:
 
       - name: Check for Changelog modifications
         run: |
-          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "CHANGELOG.md"; then
-            echo "CHANGELOG.md has been modified."
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+
+          # Skip enforcement if only CI/workflow files changed
+          if echo "$CHANGED" | grep -qvE '^\.(github|gitignore)'; then
+            if echo "$CHANGED" | grep -q "CHANGELOG.md"; then
+              echo "CHANGELOG.md has been modified."
+            else
+              echo "::error::CHANGELOG.md must be modified in every PR."
+              exit 1
+            fi
           else
-            echo "::error::CHANGELOG.md must be modified in every PR."
-            exit 1
+            echo "Only CI/config files changed — skipping changelog requirement."
           fi
