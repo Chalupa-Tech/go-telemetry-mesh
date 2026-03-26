@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Release workflow synced to standard template: chained build-push + deploy job, removed separate build-push.yml
+
 ## [0.2.1] - 2026-03-26
 
 ### Fixed

@@ -1,14 +1,9 @@
+---
 name: Release
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'CHANGELOG.md'
-      - 'go.mod'
-      - 'go.sum'
-      - '**/*.go'
-  workflow_dispatch:
+    branches: ["main"]
 
 permissions:
   contents: write
@@ -17,36 +12,13 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    outputs:
+      new_release: ${{ steps.check_tag.outputs.exists == 'false' }}
+      version: ${{ steps.changelog_version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-
-      - name: Configure Git for Private Modules
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        if: env.GH_PAT != ''
-        run: |
-          git config --global url."https://${GH_PAT}@github.com/Chalupa-Tech".insteadOf "https://github.com/Chalupa-Tech"
-
-      - name: Tidy modules
-        run: go mod tidy
-
-      - name: Verify clean modules
-        run: |
-          if ! git diff --quiet go.mod go.sum; then
-            echo "go.mod or go.sum is not tidy. Please run 'go mod tidy' and commit the changes."
-            git diff
-            exit 1
-          fi
-
-      - name: Run Tests
-        run: go test -v ./... || echo "No tests found"
 
       - name: Get Version from Changelog
         id: changelog_version
@@ -82,3 +54,60 @@ jobs:
         with:
           tag_name: v${{ steps.changelog_version.outputs.version }}
           generate_release_notes: true
+
+  build-push:
+    name: Build & Push Container
+    needs: release
+    if: needs.release.outputs.new_release == 'true'
+    uses: Chalupa-Tech/chalupa-infra/.github/workflows/build-push-reusable.yml@main
+    with:
+      image_name: go-telemetry-mesh
+    secrets:
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_CLIENT_SECRET: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+      GITEA_REGISTRY_USER: ${{ secrets.GITEA_REGISTRY_USER }}
+      GITEA_REGISTRY_PASSWORD: ${{ secrets.GITEA_REGISTRY_PASSWORD }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+
+  deploy:
+    name: Update Image Tag in chalupa-infra
+    needs: [release, build-push]
+    if: needs.release.outputs.new_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout chalupa-infra
+        uses: actions/checkout@v4
+        with:
+          repository: Chalupa-Tech/chalupa-infra
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Update image tag
+        run: |
+          VERSION="v${{ needs.release.outputs.version }}"
+          VALUES_FILE="k8s/apps/telemetry-mesh/values.yaml"
+          sed -i "s|^  tag:.*|  tag: ${VERSION}|" "$VALUES_FILE"
+          echo "Updated $VALUES_FILE to tag: $VERSION"
+          cat "$VALUES_FILE"
+
+      - name: Create PR and merge
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          VERSION="v${{ needs.release.outputs.version }}"
+          BRANCH="ci/go-telemetry-mesh-${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "deploy: go-telemetry-mesh ${VERSION}"
+          git push origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "deploy: go-telemetry-mesh ${VERSION}" \
+            --body "Automated image tag bump from [go-telemetry-mesh ${VERSION}](https://github.com/Chalupa-Tech/go-telemetry-mesh/releases/tag/${VERSION})." \
+            --head "$BRANCH" \
+            --base main)
+          echo "Created PR: $PR_URL"
+
+          gh pr merge "$PR_URL" --squash --auto
