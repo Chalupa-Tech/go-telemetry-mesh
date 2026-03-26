@@ -16,6 +16,7 @@ import (
 	"github.com/Chalupa-Tech/go-telemetry-mesh/internal/client"
 	"github.com/Chalupa-Tech/go-telemetry-mesh/internal/metrics"
 	"github.com/Chalupa-Tech/go-telemetry-mesh/internal/server"
+	telemetry "github.com/Chalupa-Tech/go-telemetry"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -23,9 +24,19 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: logLevel(),
-	})))
+	ctx := context.Background()
+
+	version := os.Getenv("APP_VERSION")
+	if version == "" {
+		version = "dev"
+	}
+	shutdown, err := telemetry.Init(ctx, "go-telemetry-mesh", version)
+	if err != nil {
+		slog.Error("failed to init telemetry", "error", err)
+		// Non-fatal: continue without tracing (gRPC otelgrpc still works via global provider).
+	} else {
+		defer shutdown()
+	}
 
 	cfg := loadConfig()
 	slog.Info("Starting telemetry-mesh",
