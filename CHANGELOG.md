@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Release workflow synced to standard template: chained build-push + deploy job, removed separate build-push.yml
+- CI: align git insteadOf config with peer repos (cosmetic, no behavior change)
 
 ## [0.2.1] - 2026-03-26
 
